@@ -189,10 +189,13 @@ test$Business_Sourced = -1
 for (col in colnames(train)) {
   levels(test$col) <- levels(train$col)
 }
-
-ForestModel = randomForest(Business_Sourced ~ ., data=train, nodesize=1, ntree=1000)
-pred = predict(ForestModel, newdata=test)
-
+preds = rep(0,nrow(test))
+for (z in 1:5) {
+    set.seed(z + 80)
+    ForestModel = randomForest(Business_Sourced ~ ., data=train, nodesize=1, ntree=1000)
+    preds = preds + predict(ForestModel, newdata=test)
+}
+pred = preds/5
 # sparse_matrix = sparse.model.matrix(Business_Sourced~.-1, data=train)
 # 
 # model_cv <- xgb.cv(data=sparse_matrix, 
