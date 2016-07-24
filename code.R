@@ -1,4 +1,4 @@
-setwd("C:/Users/Duy Tran/Desktop")
+setwd("C:/Users/Duy Tran/Desktop/the_smart_recruits/the_smart_recruits")
 library(xgboost)
 library(Matrix)
 library(ggplot2)
@@ -7,6 +7,7 @@ library(caret)
 library(readr)
 library(dplyr)
 library(tidyr)
+library(randomForest)
 #Reading in training and testing data
 train = read.csv("train.csv", stringsAsFactors = TRUE)
 test = read.csv("test.csv", stringsAsFactors = TRUE)
@@ -128,6 +129,12 @@ test$Manager_Status = as.character(test$Manager_Status)
 test$Manager_Status[test$Manager_Status == ""] = "Other"
 test$Manager_Status = as.factor(test$Manager_Status)
 
+# Equalize levels of Manager Joining Designation by changing all "7" to "6"
+train$Manager_Joining_Designation[train$Manager_Joining_Designation == "7"] = "6"
+levels(test$Manager_Joining_Designation) <- levels(train$Manager_Joining_Designation)
+
+# Add missing level into train and test
+levels(test$Applicant_Qualification) <- levels(train$Applicant_Qualification)
 
 # Remove Applicant city PIN
 train = train[,-4]
@@ -152,11 +159,12 @@ test$Manager_Age = as.numeric(test$Manager_DOJ - test$Manager_DoB) / 365
 test$Manager_Age[is.na(test$Manager_Age)] = mean(test$Manager_Age, na.rm=TRUE)
 
 # removing all dates column
-train = train[,-c(1, 2, 3, 5, 9, 14, 15)]
-test = test[,-c(2, 3, 5, 9, 14, 15)]
+train = train[,-c(1, 2, 3, 5, 9, 15)]
+test_ID = test$ID
+test = test[,-c(1, 2, 3, 5, 9, 15)]
 
-train = train[,c(17, 18, 19, 11, 9, 12, 13, 10, 15)]
-test = test[,c(1, 17, 18, 19, 11, 9, 12, 13, 10)]
+#train = train[,c(17, 18, 19, 11, 9, 12, 13, 10, 15)]
+#test = test[,c(17, 18, 19, 11, 9, 12, 13, 10)]
 # xgboost
 seed <- 235
 set.seed(seed)
@@ -176,17 +184,39 @@ xgb_params_1 = list(
   scale_pos_weight=1
   
   )
-sparse_matrix = sparse.model.matrix(Business_Sourced~.-1, data=train)
-model_cv <- xgb.cv(data=sparse_matrix, label=as.matrix(target), params = xgb_params_1, nfold=5, nrounds=1000)
+#train$Business_Sourced = as.factor(train$Business_Sourced)
+test$Business_Sourced = -1
+for (col in colnames(train)) {
+  levels(test$col) <- levels(train$col)
+}
 
-model <- xgboost(data=sparse_matrix, label=target, params = xgb_params_1, nround=1000)
-sparse_matrix_test = sparse.model.matrix(~., data=test)
-pred <- predict(model, sparse_matrix_test)
+ForestModel = randomForest(Business_Sourced ~ ., data=train, nodesize=1, ntree=1000)
+pred = predict(ForestModel, newdata=test)
+
+# sparse_matrix = sparse.model.matrix(Business_Sourced~.-1, data=train)
+# 
+# model_cv <- xgb.cv(data=sparse_matrix, 
+#                    silent = 1, 
+#                    label=as.matrix(target), 
+#                    params = xgb_params_1, 
+#                    nfold=5, 
+#                    nrounds=1000)
+# 
+# model <- xgboost(data=sparse_matrix,
+#                  silent = 1,
+#                  label=target, 
+#                  params = xgb_params_1, 
+#                  nround=1000,
+#                  early.stop.round = 100)
+# test$Business_Sourced = -1
+# sparse_matrix_test = sparse.model.matrix(Business_Sourced~.-1, data=test)
+# pred <- predict(model, sparse_matrix_test)
+
 
 # Plot feature importance
-output_vector = train[,"Business_Sourced"] == "1"
+#output_vector = train[,"Business_Sourced"] == "1"
 #importance = xgb.importance(feature_names = sparse_matrix@Dimnames[[2]], model = model)
-importance_raw = xgb.importance(feature_names = sparse_matrix@Dimnames[[2]], model = model, data = sparse_matrix, label = output_vector)
-xgb.plot.importance(importance_matrix = importance_raw)
-#submit = data.frame("ID" = test$ID, "Business_Sourced" = pred)
+#importance_raw = xgb.importance(feature_names = sparse_matrix@Dimnames[[2]], model = model, data = sparse_matrix, label = output_vector)
+#xgb.plot.importance(importance_matrix = importance_raw)
+#submit = data.frame("ID" = test_ID, "Business_Sourced" = pred)
 #write.csv(submit, "submit.csv", row.names = F)
